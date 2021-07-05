@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+
+function enable_nvm() {
+  export NVM_DIR="$HOME/.nvm"
+  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+  [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+}
+
+function install_nvm(){
+  if [[ -e "$HOME/.nvm" ]]; then
+    echo "NVM installed, skipping installation";
+    return 0;
+  fi
+  curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.38.0/install.sh | bash
+  enable_nvm;
+  nvm install 14
+}
+
+function install_client(){
+  cd $PROJECT_CLIENT
+  enable_nvm
+  nvm use 14
+  npm ci
+}
+
+function install_server(){
+  cd /project/server
+  pip3 install -r requirements.txt
+}
+
+function install() {
+  apt-get update -y
+  DEBIAN_FRONTEND="noninteractive" apt-get install -yq git python3 python3-pip curl nginx
+  install_nvm
+  pip3 install gunicorn
+  install_client;
+  install_server;
+  ln -sf $PROJECT_EC2/ec2 /usr/local/bin/ec2
+}
+
+function configure_nginx(){
+  echo "Removing old configs"
+  rm -rfv  /etc/nginx/sites-available/*
+  rm -rfv /etc/nginx/sites-enabled/*
+  echo "Old configs removed"
+  echo "Copying new configs"
+  cp -ruv /project/ec2/nginx/sites-available/* /etc/nginx/sites-available/
+  echo "New configs copied"
+  echo "Enabling sites"
+  ln -sv /etc/nginx/sites-available/react-django.conf /etc/nginx/sites-enabled/react-django.conf
+  echo "Sites enabled"
+}
+
+
+function build_client() {
+
+  enable_nvm;
+
+  cd $PROJECT_CLIENT
+
+  npm run build
+
+  mkdir -p $PROJECT_STATIC_FILES
+  cp -ruv build/static/* $PROJECT_STATIC_FILES
+
+  mkdir -p $PROJECT_CLIENT_ROOT_FILES
+  cp build/* $PROJECT_CLIENT_ROOT_FILES
+}
+
+
+function build_server() {
+  cd "$PROJECT_SERVER/api"
+
+  STATIC_ROOT="$PROJECT_STATIC_FILES" python3 manage.py collectstatic --noinput
+}
+
+
+function build(){
+  echo "Deleting outdated build artifacts"
+  rm -rf /project/ec2/server/static
+  rm -rf /project/ec2/server/root
+  echo "Outdated build artifacts deleted"
+  echo "Generating new build artifacts"
+  build_server
+  build_client
+  echo "New build artifacts generated"
+  echo "Updating nginx config"
+  configure_nginx
+}
+
+
+function start(){
+  cd $PROJECT_SERVER/api
+  service nginx restart
+  echo "Starting gunicorn server"
+  gunicorn api.wsgi --bind 127.0.0.1:8000 --log-level info --pid $PROJECT_EC2/server/pid -D
+  sleep 2
+  echo "PID: $(cat $PROJECT_EC2/server/pid)"
+}
+
+function stop(){
+  service nginx stop
+  if [[ -e "$PROJECT_EC2/server/pid" ]]; then
+    local pid="$(cat $PROJECT_EC2/server/pid)"
+    echo "Killing gunicorn process:$pid"
+    kill "$pid"
+  fi
+}
+
+PROJECT_ROOT="${2-/project}"
+
+PROJECT_ROOT="${PROJECT_ROOT%/}"
+PROJECT_CLIENT="$PROJECT_ROOT/client"
+PROJECT_SERVER="$PROJECT_ROOT/server"
+PROJECT_EC2="$PROJECT_ROOT/ec2"
+
+PROJECT_NGINX="$PROJECT_EC2/nginx"
+PROJECT_STATIC_FILES="$PROJECT_EC2/server/static"
+PROJECT_CLIENT_ROOT_FILES="$PROJECT_EC2/server/root"
+
+case "$1" in
+  install)
+    (install);
+    ;;
+  start)
+    (start);
+    ;;
+  configure_nginx)
+    (configure_nginx);
+    ;;
+  build)
+    (build);
+    ;;
+  start)
+    start;
+    ;;
+  stop)
+    stop;
+    ;;
+esac;

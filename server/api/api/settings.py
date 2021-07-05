@@ -23,7 +23,7 @@ SUBPATH = os.environ.get('SUBPATH', 'api/')
 # See https://docs.djangoproject.com/en/3.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-i5!&@6^x0m_*h88j*1s-l_iqjemol9nwg!@&i6b@r^sekleeim'
+SECRET_KEY = os.environ['DJANGO_SECRET_KEY']
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -123,6 +123,7 @@ USE_TZ = True
 
 
 STATIC_URL = f'/{SUBPATH}static/'
+STATIC_ROOT = os.environ.get('STATIC_ROOT', '/project/ec2/server/static/')
 
 
 # Default primary key field type

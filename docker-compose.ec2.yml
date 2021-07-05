@@ -1,0 +1,16 @@
+version: '3.5'
+
+services:
+  ec2:
+    image: rddt-ec2
+    container_name: ec2
+    build:
+      context: ./ec2
+      dockerfile: docker/Dockerfile
+    volumes:
+      - ./:/project
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      DJANGO_SECRET_KEY: 'secret'

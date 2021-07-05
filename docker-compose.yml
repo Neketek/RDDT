@@ -9,6 +9,8 @@ services:
       dockerfile: docker/Dockerfile
     volumes:
       - ./server:/server
+    environment:
+      DJANGO_SECRET_KEY: 'secret'
 
   client:
     image: rddt-client
